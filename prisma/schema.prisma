@@ -1,0 +1,123 @@
+// Every change to this file must ship with a migration:
+//   npm run db:migrate:dev -- --name <what_changed>
+// That writes prisma/migrations/<timestamp>_<what_changed>/migration.sql; commit it.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  moduleFormat           = "esm"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Catalog of games that can be played during a call (rps, ludo, tic_tac_toe).
+model Game {
+  code       String   @id @db.VarChar(32)
+  name       String   @db.VarChar(64)
+  minPlayers Int      @default(2) @map("min_players") @db.SmallInt
+  maxPlayers Int      @default(2) @map("max_players") @db.SmallInt
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  invites  GameInvite[]
+  sessions GameSession[]
+
+  @@map("games")
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  declined
+  cancelled
+  expired
+
+  @@map("invite_status")
+}
+
+// "You or your caller picks a game and sends an invite. The other person taps Accept."
+model GameInvite {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  callId      String       @map("call_id") @db.VarChar(64)
+  gameCode    String       @map("game_code") @db.VarChar(32)
+  fromUserId  String       @map("from_user_id") @db.VarChar(64)
+  toUserId    String       @map("to_user_id") @db.VarChar(64)
+  status      InviteStatus @default(pending)
+  expiresAt   DateTime     @map("expires_at") @db.Timestamptz(3)
+  respondedAt DateTime?    @map("responded_at") @db.Timestamptz(3)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  game    Game         @relation(fields: [gameCode], references: [code])
+  session GameSession?
+
+  @@index([callId, status])
+  @@index([toUserId, status])
+  @@map("game_invites")
+}
+
+enum SessionStatus {
+  active
+  completed
+  abandoned
+
+  @@map("session_status")
+}
+
+model GameSession {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  inviteId     String        @unique @map("invite_id") @db.Uuid
+  callId       String        @map("call_id") @db.VarChar(64)
+  gameCode     String        @map("game_code") @db.VarChar(32)
+  status       SessionStatus @default(active)
+  // Latest game state as the clients agreed on it. `version` is bumped on every
+  // move so concurrent writers on different pods can't clobber each other.
+  state        Json          @default("{}")
+  version      Int           @default(0)
+  winnerUserId String?       @map("winner_user_id") @db.VarChar(64)
+  startedAt    DateTime      @default(now()) @map("started_at") @db.Timestamptz(3)
+  endedAt      DateTime?     @map("ended_at") @db.Timestamptz(3)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  invite  GameInvite          @relation(fields: [inviteId], references: [id])
+  game    Game                @relation(fields: [gameCode], references: [code])
+  players GameSessionPlayer[]
+  moves   GameMove[]
+
+  @@index([callId])
+  @@map("game_sessions")
+}
+
+model GameSessionPlayer {
+  sessionId String   @map("session_id") @db.Uuid
+  userId    String   @map("user_id") @db.VarChar(64)
+  seat      Int      @db.SmallInt
+  joinedAt  DateTime @default(now()) @map("joined_at") @db.Timestamptz(3)
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([sessionId, userId])
+  @@unique([sessionId, seat])
+  @@index([userId])
+  @@map("game_session_players")
+}
+
+// Append-only move log. (session_id, seq) is unique, which is what makes two
+// pods racing to record the "same" move fail cleanly instead of duplicating it.
+model GameMove {
+  id        BigInt   @id @default(autoincrement())
+  sessionId String   @map("session_id") @db.Uuid
+  seq       Int
+  userId    String   @map("user_id") @db.VarChar(64)
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  session GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, seq])
+  @@map("game_moves")
+}

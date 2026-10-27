@@ -1,0 +1,15 @@
+# kubectl apply -k k8s/   (but use scripts/deploy.sh so the migration runs first)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: dostt-games
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - pdb.yaml
+images:
+  - name: dostt-call-games
+    newName: ghcr.io/hb5-llokall/in-call-game-feature
+    newTag: latest

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dostt-call-games
+data:
+  PORT: "3000"
+  LOG_LEVEL: info
+  # Per pod. With maxReplicas=10 that's up to 100 connections; use PgBouncer /
+  # RDS Proxy if that's more than the database allows.
+  DB_POOL_MAX: "10"
+  INVITE_TTL_SECONDS: "60"
+  SHUTDOWN_DELAY_MS: "5000"

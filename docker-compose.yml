@@ -1,0 +1,55 @@
+# Local stack: Postgres -> one-shot migration -> API.
+#   docker compose up --build
+#   curl localhost:3000/v1/games
+name: dostt-call-games
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: dostt
+      POSTGRES_PASSWORD: dostt
+      POSTGRES_DB: dostt_games
+    ports:
+      - "5432:5432"
+    volumes:
+      # Postgres 18 images keep data under /var/lib/postgresql/<major>/docker
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dostt -d dostt_games"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Same image as the API, runs `prisma migrate deploy` once and exits —
+  # mirrors the Kubernetes migrate Job.
+  migrate:
+    build: .
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      DATABASE_URL: postgresql://dostt:dostt@db:5432/dostt_games?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://dostt:dostt@db:5432/dostt_games?schema=public
+      DB_POOL_MAX: "10"
+      LOG_LEVEL: info
+      SHUTDOWN_DELAY_MS: "0"
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/readyz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

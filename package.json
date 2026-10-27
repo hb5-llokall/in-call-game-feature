@@ -1,0 +1,36 @@
+{
+  "name": "dostt-call-games",
+  "version": "0.1.0",
+  "private": true,
+  "description": "In-call games service for Dostt (invites, game sessions, moves)",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "postinstall": "prisma generate",
+    "db:generate": "prisma generate",
+    "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:create": "prisma migrate dev --create-only",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:migrate:status": "prisma migrate status"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
+    "dotenv": "18.0.9",
+    "fastify": "5.12.7",
+    "pg": "8.23.1",
+    "prisma": "7.10.1"
+  },
+  "devDependencies": {
+    "@types/node": "24",
+    "@types/pg": "8",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2"
+  }
+}
